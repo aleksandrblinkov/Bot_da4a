@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Инициализация бота
-BOT_TOKEN = os.environ.get('YOUR_BOT_TOKEN')
+BOT_TOKEN = os.environ.get('5679093544:AAEZgFeVu-lgPM00oP1kfaUduCJlpR2_Uug')
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Подключение к PostgreSQL
