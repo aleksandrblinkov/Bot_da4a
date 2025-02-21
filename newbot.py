@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Получение токена бота
-YOUR_BOT_TOKEN = os.environ.get('5679093544:AAEZgFeVu-lgPM00oP1kfaUduCJlpR2_Uug')
+YOUR_BOT_TOKEN = os.environ.get('YOUR_BOT_TOKEN')
 
 #  Если переменная окружения не установлена, используйте токен напрямую (только для локальной разработки)
 if not YOUR_BOT_TOKEN:
