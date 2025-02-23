@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 # Получение токена бота
 YOUR_BOT_TOKEN = os.environ.get('YOUR_BOT_TOKEN')
 
-
-#  Если переменная окружения не установлена, используйте токен напрямую (только для локальной разработки)
+# Если переменная окружения не установлена, используйте токен напрямую (только для локальной разработки)
 if not YOUR_BOT_TOKEN:
     YOUR_BOT_TOKEN = "5679093544:AAEZgFeVu-lgPM00oP1kfaUduCJlpR2_Uug"  # Замените на ваш токен
     logger.warning("Переменная окружения YOUR_BOT_TOKEN не установлена. Используется токен из кода.")
@@ -30,7 +29,6 @@ def get_db_connection():
     DATABASE_URL = os.environ.get('DATABASE_URL')
     conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     return conn
-
 
 # Создание таблиц
 def create_tables():
@@ -50,7 +48,7 @@ def create_tables():
         question VARCHAR NOT NULL,
         answer VARCHAR NOT NULL,
         photo VARCHAR,
-        FOREIGN KEY (quiz_id) REFERENCES quizzes (id)
+        FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE
     )
     ''')
     cursor.execute('''
@@ -60,7 +58,7 @@ def create_tables():
         user_id INT NOT NULL,
         username VARCHAR NOT NULL,
         score INT DEFAULT 0,
-        FOREIGN KEY (quiz_id) REFERENCES quizzes (id)
+        FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE
     )
     ''')
     cursor.execute('''
@@ -72,7 +70,6 @@ def create_tables():
     ''')
     conn.commit()
     conn.close()
-
 
 # Инициализация администратора
 def initialize_admin():
@@ -94,7 +91,6 @@ def initialize_admin():
         logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
 
     conn.close()
-
 
 # Создаем таблицы и добавляем администратора
 create_tables()
@@ -157,11 +153,9 @@ def admin_commands(message):
     else:
         bot.send_message(message.chat.id, "У вас нет прав для выполнения этой команды.")
 
-#  Добавление админа
-
+# Добавление админа
 @bot.message_handler(commands=['add_admin'])
 def add_admin(message):
-    # Проверяем, является ли отправитель админом
     if is_admin(message.from_user.id):
         msg = bot.send_message(message.chat.id, "Перешлите любое сообщение от пользователя, которого нужно сделать админом.")
         bot.register_next_step_handler(msg, process_add_admin)
@@ -169,33 +163,26 @@ def add_admin(message):
         bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды.")
 
 def process_add_admin(message):
-    # Проверяем, что сообщение является пересланным
     if not (message.forward_from or message.forward_from_chat):
         bot.send_message(message.chat.id, "❌ Это не пересланное сообщение. Пожалуйста, перешлите сообщение от пользователя.")
         return
 
-    # Извлекаем user_id и username
     if message.forward_from:
-        # Если сообщение переслано из личного чата
         user_id = message.forward_from.id
         username = message.forward_from.username or message.forward_from.first_name
     else:
-        # Если сообщение переслано из группы или канала
         bot.send_message(message.chat.id, "❌ Нельзя добавить админа из группы или канала. Перешлите сообщение из личного чата.")
         return
 
-    # Подключаемся к базе данных
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Проверяем, не является ли пользователь уже админом
         cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (user_id,))
         if cursor.fetchone():
             bot.send_message(message.chat.id, f"❌ Пользователь @{username} уже является админом.")
             return
 
-        # Добавляем админа в таблицу admins
         cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (user_id, username))
         conn.commit()
         bot.send_message(message.chat.id, f"✅ Пользователь @{username} успешно добавлен в список админов!")
@@ -269,7 +256,6 @@ def process_photo(message):
     else:
         temp_data[user_id]['questions'][-1]['photo'] = None
 
-    # Показываем, как будет выглядеть вопрос
     question_data = temp_data[user_id]['questions'][-1]
     preview = f"📝 Вопрос: {question_data['question']}\n✅ Ответ: {question_data['answer']}"
     if question_data['photo']:
@@ -277,7 +263,6 @@ def process_photo(message):
     else:
         bot.send_message(message.chat.id, preview)
 
-    # Предлагаем добавить еще вопросы
     markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
     markup.add("Добавить еще вопрос", "Завершить викторину")
     msg = bot.send_message(message.chat.id, "Что дальше?", reply_markup=markup)
@@ -289,7 +274,6 @@ def handle_quiz_creation(message):
         msg = bot.send_message(message.chat.id, "Введите следующий вопрос:")
         bot.register_next_step_handler(msg, process_question)
     else:
-        # Сохраняем викторину в базу данных
         quiz_name = temp_data[user_id]['quiz_name']
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -330,7 +314,6 @@ def process_delete_quiz(message):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM quizzes WHERE id = %s", (quiz_id,))
-    cursor.execute("DELETE FROM questions WHERE quiz_id = %s", (quiz_id,))
     conn.commit()
     conn.close()
     bot.send_message(message.chat.id, f"Викторина '{quiz_name}' удалена.")
@@ -393,7 +376,7 @@ def ask_question(chat_id, quiz_id):
 def handle_answer(message):
     chat_id = message.chat.id
     user_answer = message.text.lower()
-    correct_answer = active_quizzes[chat_id]['current_answer']
+    correct_answer = active_quizzes[chat_id].get('current_answer', '')
 
     if user_answer == correct_answer:
         user_id = message.from_user.id
@@ -401,10 +384,8 @@ def handle_answer(message):
         active_quizzes[chat_id]['scores'][user_id] += 1
         bot.send_message(chat_id, f"🎉 Правильно! @{username} получает очко!")
 
-        # Показываем таблицу результатов
         show_scores(chat_id)
 
-        # Переходим к следующему вопросу
         active_quizzes[chat_id]['current_question'] += 1
         time.sleep(5)
         ask_question(chat_id, active_quizzes[chat_id]['quiz_id'])
@@ -427,18 +408,18 @@ def end_quiz(chat_id, quiz_id):
         bot.send_message(chat_id, "Викторина завершена, но никто не ответил правильно.")
         return
 
-    # Сохраняем результаты в базу данных
+        # Сохраняем результаты в базу данных
     conn = get_db_connection()
     cursor = conn.cursor()
     for user_id, score in scores.items():
         user = bot.get_chat_member(chat_id, user_id).user
         username = user.username or user.first_name
         cursor.execute("INSERT INTO results (quiz_id, user_id, username, score) VALUES (%s, %s, %s, %s)",
-                       (quiz_id, user_id, username, score))
+                           (quiz_id, user_id, username, score))
     conn.commit()
     conn.close()
 
-    # Удаляем викторину из базы данных
+# Удаляем викторину из базы данных
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM quizzes WHERE id = %s", (quiz_id,))
@@ -458,16 +439,16 @@ def end_quiz(chat_id, quiz_id):
     # Очищаем активную викторину
     del active_quizzes[chat_id]
 
-# Обработка ошибок
-@bot.message_handler(func=lambda message: True)
-def handle_errors(message):
-    try:
-        bot.process_new_messages([message])
-    except Exception as ex:
-        logger.error(f"Ошибка: {ex}", exc_info=True)
-        bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
+    # Обработка ошибок
+    @bot.message_handler(func=lambda message: True)
+    def handle_errors(message):
+        try:
+            bot.process_new_messages([message])
+        except Exception as ex:
+            logger.error(f"Ошибка: {ex}", exc_info=True)
+            bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
 
-# Запуск бота
-if __name__ == '__main__':
-    logger.info("Бот запущен и работает...")
-    bot.polling(none_stop=True)
+    # Запуск бота
+    if __name__ == '__main__':
+        logger.info("Бот запущен и работает...")
+        bot.polling(none_stop=True)
