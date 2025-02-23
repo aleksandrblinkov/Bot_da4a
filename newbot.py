@@ -313,10 +313,17 @@ def process_delete_quiz(message):
     quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM quizzes WHERE id = %s", (quiz_id,))
-    conn.commit()
-    conn.close()
-    bot.send_message(message.chat.id, f"Викторина '{quiz_name}' удалена.")
+
+    try:
+        # Удаляем викторину и связанные вопросы (благодаря ON DELETE CASCADE)
+        cursor.execute("DELETE FROM quizzes WHERE id = %s", (quiz_id,))
+        conn.commit()
+        bot.send_message(message.chat.id, f"Викторина '{quiz_name}' удалена.")
+    except Exception as e:
+        logger.error(f"Ошибка при удалении викторины: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при удалении викторины.")
+    finally:
+        conn.close()
 
 # Запуск викторины в общем чате
 @bot.message_handler(commands=['start_quiz'])
