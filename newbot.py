@@ -309,8 +309,13 @@ def delete_quiz(message):
         bot.register_next_step_handler(msg, process_delete_quiz)
 
 def process_delete_quiz(message):
-    quiz_name = message.text.split(" (ID: ")[0]
-    quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
+    try:
+        quiz_name = message.text.split(" (ID: ")[0]
+        quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
+    except IndexError:
+        bot.send_message(message.chat.id, "❌ Неверный формат викторины. Пожалуйста, выберите викторину из списка.")
+        return
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -347,8 +352,13 @@ def start_quiz(message):
         bot.send_message(message.chat.id, "❌ У вас нет прав для запуска викторины. Обратитесь к админу.")
 
 def process_start_quiz(message):
-    quiz_name = message.text.split(" (ID: ")[0]
-    quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
+    try:
+        quiz_name = message.text.split(" (ID: ")[0]
+        quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
+    except IndexError:
+        bot.send_message(message.chat.id, "❌ Неверный формат викторины. Пожалуйста, выберите викторину из списка.")
+        return
+
     active_quizzes[message.chat.id] = {'quiz_id': quiz_id, 'current_question': 0, 'scores': defaultdict(int)}
 
     bot.send_message(message.chat.id, f"🎉 Викторина '{quiz_name}' начнется через 15 секунд! Приготовьтесь!")
