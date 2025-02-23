@@ -422,8 +422,6 @@ def handle_answer(message):
         active_quizzes[chat_id]['current_question'] += 1
         time.sleep(5)
         ask_question(chat_id, active_quizzes[chat_id]['quiz_id'])
-    else:
-        bot.send_message(chat_id, "❌ Неправильный ответ. Попробуйте еще раз!")
 
 def show_scores(chat_id):
     scores = active_quizzes[chat_id]['scores']
