@@ -157,7 +157,8 @@ def admin_commands(message):
     else:
         bot.send_message(message.chat.id, "У вас нет прав для выполнения этой команды.")
 
-# Добавление админа
+#  Добавление админа
+
 @bot.message_handler(commands=['add_admin'])
 def add_admin(message):
     if is_admin(message.from_user.id):  # Проверяем, является ли отправитель админом
