@@ -16,27 +16,6 @@ logger = logging.getLogger(__name__)
 # Получение токена бота
 YOUR_BOT_TOKEN = os.environ.get('YOUR_BOT_TOKEN')
 
-
-def initialize_admin():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Твой ID и username
-    admin_id = 881514562
-    admin_username = "mangata_al"
-
-    # Проверяем, есть ли ты в таблице admins
-    cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (admin_id,))
-    result = cursor.fetchone()
-
-    # Если тебя нет, добавляем
-    if not result:
-        cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (admin_id, admin_username))
-        conn.commit()
-        logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
-
-    conn.close()
-
 #  Если переменная окружения не установлена, используйте токен напрямую (только для локальной разработки)
 if not YOUR_BOT_TOKEN:
     YOUR_BOT_TOKEN = "5679093544:AAEZgFeVu-lgPM00oP1kfaUduCJlpR2_Uug"  # Замените на ваш токен
@@ -92,7 +71,30 @@ def create_tables():
     conn.commit()
     conn.close()
 
+# Инициализация администратора
+def initialize_admin():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Твой ID и username
+    admin_id = 881514562
+    admin_username = "mangata_al"
+    
+    # Проверяем, есть ли ты в таблице admins
+    cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (admin_id,))
+    result = cursor.fetchone()
+    
+    # Если тебя нет, добавляем
+    if not result:
+        cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (admin_id, admin_username))
+        conn.commit()
+        logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
+    
+    conn.close()
+
+# Создаем таблицы и добавляем администратора
 create_tables()
+initialize_admin()
 
 # Временные данные для создания викторин
 temp_data = {}
