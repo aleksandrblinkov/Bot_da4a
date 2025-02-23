@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Получение токена бота
-YOUR_BOT_TOKEN = os.environ.get('YOUR_BOT_TOKEN')
+YOUR_BOT_TOKEN = os.environ.get('postgresql://postgres:jOXVYzKMSTWqrQLJGtAwkuYVKQlAfFnY@metro.proxy.rlwy.net:26866/railway')
 
 #  Если переменная окружения не установлена, используйте токен напрямую (только для локальной разработки)
 if not YOUR_BOT_TOKEN:
