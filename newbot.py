@@ -107,9 +107,6 @@ active_quizzes = defaultdict(dict)
 def start_command(message):
     bot.send_message(message.chat.id, "Привет! Я бот для викторин. Используй /help чтобы увидеть список команд.")
 
-@bot.message_handler(commands=['clear_keyboard'])
-def clear_keyboard(message):
-# Удаляем клавиатуру у всех пользователей
     markup = types.ReplyKeyboardRemove(selective=False)
     bot.send_message(message.chat.id, "Клавиатура очищена.", reply_markup=markup)
 
