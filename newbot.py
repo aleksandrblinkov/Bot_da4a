@@ -307,39 +307,42 @@ def delete_quiz(message):
         bot.send_message(message.chat.id, "Нет доступных викторин для удаления.")
         return
 
-    # Создаем клавиатуру с выбором викторин
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    # Создаем inline-клавиатуру с выбором викторин для удаления
+    markup = types.InlineKeyboardMarkup()
     for quiz in quizzes:
-        markup.add(f"{quiz[1]} (ID: {quiz[0]})")
+        markup.add(types.InlineKeyboardButton(
+            text=f"{quiz[1]} (ID: {quiz[0]})",  # Название и ID викторины
+            callback_data=f"delete_quiz_{quiz[0]}"  # Данные для обработки (ID викторины)
+        ))
 
-    # Отправляем сообщение с кнопками выбора викторины
-    msg = bot.send_message(message.chat.id, "Выберите викторину для удаления:", reply_markup=markup)
-    bot.register_next_step_handler(msg, process_delete_quiz)
+    # Отправляем сообщение с inline-клавиатурой
+    bot.send_message(message.chat.id, "Выберите викторину для удаления:", reply_markup=markup)
 
-def process_delete_quiz(message):
+@bot.callback_query_handler(func=lambda call: call.data.startswith("delete_quiz_"))
+def process_delete_quiz(call):
     # Проверяем, является ли пользователь админом
-    if not is_admin(message.from_user.id):
-        bot.send_message(message.chat.id, "❌ У вас нет прав для удаления викторины. Обратитесь к админу.")
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для удаления викторины.")
         return
 
-    try:
-        quiz_name = message.text.split(" (ID: ")[0]
-        quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
-    except IndexError:
-        bot.send_message(message.chat.id, "❌ Неверный формат викторины. Пожалуйста, выберите викторину из списка.")
-        return
+    # Извлекаем ID викторины из callback_data
+    quiz_id = int(call.data.split("_")[2])
 
+    # Получаем название викторины из базы данных
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT name FROM quizzes WHERE id = %s", (quiz_id,))
+    quiz_name = cursor.fetchone()[0]
 
     try:
         # Удаляем викторину и связанные вопросы (благодаря ON DELETE CASCADE)
         cursor.execute("DELETE FROM quizzes WHERE id = %s", (quiz_id,))
         conn.commit()
-        bot.send_message(message.chat.id, f"Викторина '{quiz_name}' удалена.")
+        bot.answer_callback_query(call.id, f"Викторина '{quiz_name}' удалена.")
+        bot.send_message(call.message.chat.id, f"✅ Викторина '{quiz_name}' успешно удалена.")
     except Exception as e:
         logger.error(f"Ошибка при удалении викторины: {e}")
-        bot.send_message(message.chat.id, "❌ Произошла ошибка при удалении викторины.")
+        bot.answer_callback_query(call.id, "❌ Произошла ошибка при удалении викторины.")
     finally:
         conn.close()
 
@@ -361,39 +364,47 @@ def start_quiz(message):
         bot.send_message(message.chat.id, "Нет доступных викторин.")
         return
 
-    # Создаем клавиатуру с выбором викторин
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    # Создаем inline-клавиатуру с выбором викторин
+    markup = types.InlineKeyboardMarkup()
     for quiz in quizzes:
-        markup.add(f"{quiz[1]} (ID: {quiz[0]})")
+        # Добавляем кнопку для каждой викторины
+        markup.add(types.InlineKeyboardButton(
+            text=quiz[1],  # Название викторины
+            callback_data=f"start_quiz_{quiz[0]}"  # Данные для обработки (ID викторины)
+        ))
 
-    # Отправляем сообщение с кнопками выбора викторины
-    msg = bot.send_message(message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
-    bot.register_next_step_handler(msg, process_start_quiz)
+    # Отправляем сообщение с inline-клавиатурой
+    bot.send_message(message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
 
-def process_start_quiz(message):
+@bot.callback_query_handler(func=lambda call: call.data.startswith("start_quiz_"))
+def process_start_quiz(call):
     # Проверяем, является ли пользователь админом
-    if not is_admin(message.from_user.id):
-        bot.send_message(message.chat.id, "❌ У вас нет прав для запуска викторины. Обратитесь к админу.")
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для запуска викторины.")
         return
 
-    try:
-        quiz_name = message.text.split(" (ID: ")[0]
-        quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
-    except IndexError:
-        bot.send_message(message.chat.id, "❌ Неверный формат викторины. Пожалуйста, выберите викторину из списка.")
-        return
+    # Извлекаем ID викторины из callback_data
+    quiz_id = int(call.data.split("_")[2])
+
+    # Получаем название викторины из базы данных
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM quizzes WHERE id = %s", (quiz_id,))
+    quiz_name = cursor.fetchone()[0]
+    conn.close()
 
     # Инициализируем викторину
-    active_quizzes[message.chat.id] = {
+    active_quizzes[call.message.chat.id] = {
         'quiz_id': quiz_id,
         'current_question': 0,
         'scores': defaultdict(int),
         'current_answer': None  # Добавляем ключ 'current_answer'
     }
 
-    bot.send_message(message.chat.id, f"🎉 Викторина '{quiz_name}' начнется через 15 секунд! Приготовьтесь!")
+    # Уведомляем администратора о начале викторины
+    bot.send_message(call.message.chat.id, f"🎉 Викторина '{quiz_name}' начнется через 15 секунд! Приготовьтесь!")
     time.sleep(15)
-    ask_question(message.chat.id, quiz_id)
+    ask_question(call.message.chat.id, quiz_id)
 
 def ask_question(chat_id, quiz_id):
     conn = get_db_connection()
