@@ -161,30 +161,38 @@ def admin_commands(message):
 
 @bot.message_handler(commands=['add_admin'])
 def add_admin(message):
-    if is_admin(message.from_user.id):  # Проверяем, является ли отправитель админом
-        msg = bot.send_message(message.chat.id, "Введите username нового админа (например, @username):")
+    # Проверяем, является ли отправитель админом
+    if is_admin(message.from_user.id):
+        msg = bot.send_message(message.chat.id, "Перешлите любое сообщение от пользователя, которого нужно сделать админом.")
         bot.register_next_step_handler(msg, process_add_admin)
     else:
         bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды.")
 
 def process_add_admin(message):
-    username = message.text.strip("@")  # Убираем символ @ из username
-    user_id = message.from_user.id  # ID пользователя, который добавляет админа
-
-    # Проверяем, что username не пустой
-    if not username:
-        bot.send_message(message.chat.id, "❌ Username не может быть пустым.")
+    # Проверяем, что сообщение является пересланным
+    if not message.forward_from:
+        bot.send_message(message.chat.id, "❌ Это не пересланное сообщение. Пожалуйста, перешлите сообщение от пользователя.")
         return
+
+    # Извлекаем user_id и username из пересланного сообщения
+    user_id = message.forward_from.id
+    username = message.forward_from.username or message.forward_from.first_name
 
     # Подключаемся к базе данных
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
+        # Проверяем, не является ли пользователь уже админом
+        cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (user_id,))
+        if cursor.fetchone():
+            bot.send_message(message.chat.id, f"❌ Пользователь @{username} уже является админом.")
+            return
+
         # Добавляем админа в таблицу admins
         cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (user_id, username))
         conn.commit()
-        bot.send_message(message.chat.id, f"✅ Админ @{username} успешно добавлен!")
+        bot.send_message(message.chat.id, f"✅ Пользователь @{username} успешно добавлен в список админов!")
     except Exception as e:
         logger.error(f"Ошибка при добавлении админа: {e}")
         bot.send_message(message.chat.id, "❌ Произошла ошибка при добавлении админа.")
