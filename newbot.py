@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Получение токена бота
 YOUR_BOT_TOKEN = os.environ.get('YOUR_BOT_TOKEN')
 
+
 #  Если переменная окружения не установлена, используйте токен напрямую (только для локальной разработки)
 if not YOUR_BOT_TOKEN:
     YOUR_BOT_TOKEN = "5679093544:AAEZgFeVu-lgPM00oP1kfaUduCJlpR2_Uug"  # Замените на ваш токен
@@ -29,6 +30,7 @@ def get_db_connection():
     DATABASE_URL = os.environ.get('DATABASE_URL')
     conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     return conn
+
 
 # Создание таблиц
 def create_tables():
@@ -71,26 +73,28 @@ def create_tables():
     conn.commit()
     conn.close()
 
+
 # Инициализация администратора
 def initialize_admin():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Твой ID и username
     admin_id = 881514562
     admin_username = "mangata_al"
-    
+
     # Проверяем, есть ли ты в таблице admins
     cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (admin_id,))
     result = cursor.fetchone()
-    
+
     # Если тебя нет, добавляем
     if not result:
         cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (admin_id, admin_username))
         conn.commit()
         logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
-    
+
     conn.close()
+
 
 # Создаем таблицы и добавляем администратора
 create_tables()
@@ -156,18 +160,35 @@ def admin_commands(message):
 # Добавление админа
 @bot.message_handler(commands=['add_admin'])
 def add_admin(message):
-    if is_admin(message.from_user.id):
+    if is_admin(message.from_user.id):  # Проверяем, является ли отправитель админом
         msg = bot.send_message(message.chat.id, "Введите username нового админа (например, @username):")
         bot.register_next_step_handler(msg, process_add_admin)
+    else:
+        bot.send_message(message.chat.id, "❌ У вас нет прав для выполнения этой команды.")
 
 def process_add_admin(message):
-    username = message.text.strip("@")
+    username = message.text.strip("@")  # Убираем символ @ из username
+    user_id = message.from_user.id  # ID пользователя, который добавляет админа
+
+    # Проверяем, что username не пустой
+    if not username:
+        bot.send_message(message.chat.id, "❌ Username не может быть пустым.")
+        return
+
+    # Подключаемся к базе данных
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (message.from_user.id, username))
-    conn.commit()
-    conn.close()
-    bot.send_message(message.chat.id, f"Админ @{username} успешно добавлен!")
+
+    try:
+        # Добавляем админа в таблицу admins
+        cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (user_id, username))
+        conn.commit()
+        bot.send_message(message.chat.id, f"✅ Админ @{username} успешно добавлен!")
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении админа: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при добавлении админа.")
+    finally:
+        conn.close()
 
 # Удаление админа
 @bot.message_handler(commands=['remove_admin'])
