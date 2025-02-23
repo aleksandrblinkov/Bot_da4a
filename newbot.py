@@ -107,6 +107,12 @@ active_quizzes = defaultdict(dict)
 def start_command(message):
     bot.send_message(message.chat.id, "Привет! Я бот для викторин. Используй /help чтобы увидеть список команд.")
 
+@bot.message_handler(commands=['clear_keyboard'])
+def clear_keyboard(message):
+# Удаляем клавиатуру у всех пользователей
+    markup = types.ReplyKeyboardRemove(selective=False)
+    bot.send_message(message.chat.id, "Клавиатура очищена.", reply_markup=markup)
+
 # Проверка, является ли пользователь админом
 def is_admin(user_id):
     conn = get_db_connection()
@@ -345,6 +351,7 @@ def process_delete_quiz(call):
         bot.answer_callback_query(call.id, "❌ Произошла ошибка при удалении викторины.")
     finally:
         conn.close()
+
 
 # Запуск викторины в общем чате
 @bot.message_handler(commands=['start_quiz'])
