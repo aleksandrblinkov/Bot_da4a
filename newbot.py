@@ -376,7 +376,7 @@ def ask_question(chat_id, quiz_id):
 def handle_answer(message):
     chat_id = message.chat.id
     user_answer = message.text.lower()
-    correct_answer = active_quizzes[chat_id].get('current_answer', '')
+    correct_answer = active_quizzes[chat_id]['current_answer']
 
     if user_answer == correct_answer:
         user_id = message.from_user.id
@@ -408,26 +408,16 @@ def end_quiz(chat_id, quiz_id):
         bot.send_message(chat_id, "Викторина завершена, но никто не ответил правильно.")
         return
 
-        # Сохраняем результаты в базу данных
     conn = get_db_connection()
     cursor = conn.cursor()
     for user_id, score in scores.items():
         user = bot.get_chat_member(chat_id, user_id).user
         username = user.username or user.first_name
         cursor.execute("INSERT INTO results (quiz_id, user_id, username, score) VALUES (%s, %s, %s, %s)",
-                           (quiz_id, user_id, username, score))
+                       (quiz_id, user_id, username, score))
     conn.commit()
     conn.close()
 
-# Удаляем викторину из базы данных
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM quizzes WHERE id = %s", (quiz_id,))
-    cursor.execute("DELETE FROM questions WHERE quiz_id = %s", (quiz_id,))
-    conn.commit()
-    conn.close()
-
-    # Показываем финальные результаты
     final_scoreboard = "🏆 Финальные результаты:\n"
     for user_id, score in scores.items():
         user = bot.get_chat_member(chat_id, user_id).user
@@ -436,19 +426,18 @@ def end_quiz(chat_id, quiz_id):
     bot.send_message(chat_id, final_scoreboard)
     bot.send_message(chat_id, "🎉 Викторина завершена! Спасибо за участие!")
 
-    # Очищаем активную викторину
     del active_quizzes[chat_id]
 
-    # Обработка ошибок
-    @bot.message_handler(func=lambda message: True)
-    def handle_errors(message):
-        try:
-            bot.process_new_messages([message])
-        except Exception as ex:
-            logger.error(f"Ошибка: {ex}", exc_info=True)
-            bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
+# Обработка ошибок
+@bot.message_handler(func=lambda message: True)
+def handle_errors(message):
+    try:
+        bot.process_new_messages([message])
+    except Exception as ex:
+        logger.error(f"Ошибка: {ex}", exc_info=True)
+        bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
 
-    # Запуск бота
-    if __name__ == '__main__':
-        logger.info("Бот запущен и работает...")
-        bot.polling(none_stop=True)
+# Запуск бота
+if __name__ == '__main__':
+    logger.info("Бот запущен и работает...")
+    bot.polling(none_stop=True)
