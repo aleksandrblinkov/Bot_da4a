@@ -26,7 +26,7 @@ bot = telebot.TeleBot(YOUR_BOT_TOKEN)
 
 # Подключение к PostgreSQL
 def get_db_connection():
-    DATABASE_URL = os.environ.get('postgresql://postgres:jOXVYzKMSTWqrQLJGtAwkuYVKQlAfFnY@metro.proxy.rlwy.net:26866/railway')
+    DATABASE_URL = os.environ.get('DATABASE_URL')
     conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     return conn
 
