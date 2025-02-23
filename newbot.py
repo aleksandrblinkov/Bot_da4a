@@ -170,13 +170,19 @@ def add_admin(message):
 
 def process_add_admin(message):
     # Проверяем, что сообщение является пересланным
-    if not message.forward_from:
+    if not (message.forward_from or message.forward_from_chat):
         bot.send_message(message.chat.id, "❌ Это не пересланное сообщение. Пожалуйста, перешлите сообщение от пользователя.")
         return
 
-    # Извлекаем user_id и username из пересланного сообщения
-    user_id = message.forward_from.id
-    username = message.forward_from.username or message.forward_from.first_name
+    # Извлекаем user_id и username
+    if message.forward_from:
+        # Если сообщение переслано из личного чата
+        user_id = message.forward_from.id
+        username = message.forward_from.username or message.forward_from.first_name
+    else:
+        # Если сообщение переслано из группы или канала
+        bot.send_message(message.chat.id, "❌ Нельзя добавить админа из группы или канала. Перешлите сообщение из личного чата.")
+        return
 
     # Подключаемся к базе данных
     conn = get_db_connection()
