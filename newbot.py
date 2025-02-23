@@ -359,7 +359,13 @@ def process_start_quiz(message):
         bot.send_message(message.chat.id, "❌ Неверный формат викторины. Пожалуйста, выберите викторину из списка.")
         return
 
-    active_quizzes[message.chat.id] = {'quiz_id': quiz_id, 'current_question': 0, 'scores': defaultdict(int)}
+    # Инициализируем викторину
+    active_quizzes[message.chat.id] = {
+        'quiz_id': quiz_id,
+        'current_question': 0,
+        'scores': defaultdict(int),
+        'current_answer': None  # Добавляем ключ 'current_answer'
+    }
 
     bot.send_message(message.chat.id, f"🎉 Викторина '{quiz_name}' начнется через 15 секунд! Приготовьтесь!")
     time.sleep(15)
@@ -371,8 +377,10 @@ def ask_question(chat_id, quiz_id):
     cursor.execute("SELECT question, answer, photo FROM questions WHERE quiz_id = %s", (quiz_id,))
     questions = cursor.fetchall()
     conn.close()
+
     if not questions:
         bot.send_message(chat_id, "В этой викторине нет вопросов.")
+        end_quiz(chat_id, quiz_id)
         return
 
     current_question = active_quizzes[chat_id]['current_question']
@@ -381,17 +389,24 @@ def ask_question(chat_id, quiz_id):
         return
 
     question, answer, photo = questions[current_question]
-    active_quizzes[chat_id]['current_answer'] = answer.lower()
+    active_quizzes[chat_id]['current_answer'] = answer.lower()  # Добавляем ключ 'current_answer'
 
     if photo:
         bot.send_photo(chat_id, photo, caption=f"❓ Вопрос: {question}")
     else:
         bot.send_message(chat_id, f"❓ Вопрос: {question}")
 
+
 # Обработка ответов
 @bot.message_handler(func=lambda message: message.chat.id in active_quizzes)
 def handle_answer(message):
     chat_id = message.chat.id
+
+    # Проверяем, активна ли викторина и есть ли текущий вопрос
+    if chat_id not in active_quizzes or 'current_answer' not in active_quizzes[chat_id]:
+        bot.send_message(chat_id, "❌ Викторина не активна или вопрос не задан.")
+        return
+
     user_answer = message.text.lower()
     correct_answer = active_quizzes[chat_id]['current_answer']
 
@@ -403,9 +418,12 @@ def handle_answer(message):
 
         show_scores(chat_id)
 
+        # Переходим к следующему вопросу
         active_quizzes[chat_id]['current_question'] += 1
         time.sleep(5)
         ask_question(chat_id, active_quizzes[chat_id]['quiz_id'])
+    else:
+        bot.send_message(chat_id, "❌ Неправильный ответ. Попробуйте еще раз!")
 
 def show_scores(chat_id):
     scores = active_quizzes[chat_id]['scores']
