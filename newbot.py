@@ -292,23 +292,36 @@ def handle_quiz_creation(message):
 # Удаление викторины
 @bot.message_handler(commands=['delete_quiz'])
 def delete_quiz(message):
-    if is_admin(message.from_user.id):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM quizzes")
-        quizzes = cursor.fetchall()
-        conn.close()
-        if not quizzes:
-            bot.send_message(message.chat.id, "Нет доступных викторин для удаления.")
-            return
+    # Проверяем, является ли пользователь админом
+    if not is_admin(message.from_user.id):
+        bot.send_message(message.chat.id, "❌ У вас нет прав для удаления викторины. Обратитесь к админу.")
+        return
 
-        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
-        for quiz in quizzes:
-            markup.add(f"{quiz[1]} (ID: {quiz[0]})")
-        msg = bot.send_message(message.chat.id, "Выберите викторину для удаления:", reply_markup=markup)
-        bot.register_next_step_handler(msg, process_delete_quiz)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM quizzes")
+    quizzes = cursor.fetchall()
+    conn.close()
+
+    if not quizzes:
+        bot.send_message(message.chat.id, "Нет доступных викторин для удаления.")
+        return
+
+    # Создаем клавиатуру с выбором викторин
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    for quiz in quizzes:
+        markup.add(f"{quiz[1]} (ID: {quiz[0]})")
+
+    # Отправляем сообщение с кнопками выбора викторины
+    msg = bot.send_message(message.chat.id, "Выберите викторину для удаления:", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_delete_quiz)
 
 def process_delete_quiz(message):
+    # Проверяем, является ли пользователь админом
+    if not is_admin(message.from_user.id):
+        bot.send_message(message.chat.id, "❌ У вас нет прав для удаления викторины. Обратитесь к админу.")
+        return
+
     try:
         quiz_name = message.text.split(" (ID: ")[0]
         quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
@@ -333,25 +346,36 @@ def process_delete_quiz(message):
 # Запуск викторины в общем чате
 @bot.message_handler(commands=['start_quiz'])
 def start_quiz(message):
-    if is_admin(message.from_user.id):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM quizzes")
-        quizzes = cursor.fetchall()
-        conn.close()
-        if not quizzes:
-            bot.send_message(message.chat.id, "Нет доступных викторин.")
-            return
-
-        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
-        for quiz in quizzes:
-            markup.add(f"{quiz[1]} (ID: {quiz[0]})")
-        msg = bot.send_message(message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
-        bot.register_next_step_handler(msg, process_start_quiz)
-    else:
+    # Проверяем, является ли пользователь админом
+    if not is_admin(message.from_user.id):
         bot.send_message(message.chat.id, "❌ У вас нет прав для запуска викторины. Обратитесь к админу.")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM quizzes")
+    quizzes = cursor.fetchall()
+    conn.close()
+
+    if not quizzes:
+        bot.send_message(message.chat.id, "Нет доступных викторин.")
+        return
+
+    # Создаем клавиатуру с выбором викторин
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    for quiz in quizzes:
+        markup.add(f"{quiz[1]} (ID: {quiz[0]})")
+
+    # Отправляем сообщение с кнопками выбора викторины
+    msg = bot.send_message(message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_start_quiz)
 
 def process_start_quiz(message):
+    # Проверяем, является ли пользователь админом
+    if not is_admin(message.from_user.id):
+        bot.send_message(message.chat.id, "❌ У вас нет прав для запуска викторины. Обратитесь к админу.")
+        return
+
     try:
         quiz_name = message.text.split(" (ID: ")[0]
         quiz_id = int(message.text.split(" (ID: ")[1].rstrip(")"))
@@ -422,6 +446,7 @@ def handle_answer(message):
         active_quizzes[chat_id]['current_question'] += 1
         time.sleep(5)
         ask_question(chat_id, active_quizzes[chat_id]['quiz_id'])
+
 
 def show_scores(chat_id):
     scores = active_quizzes[chat_id]['scores']
