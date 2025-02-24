@@ -108,6 +108,7 @@ def start_command(message):
     bot.send_message(message.chat.id, "Привет! Я бот для викторин. Используй /help чтобы увидеть список команд.")
     #  чтистка клавиатуры
     markup = types.ReplyKeyboardRemove(selective=False)
+    bot.send_message(message.chat.id, "Клавиатура очищена.", reply_markup=markup)
 
 # Проверка, является ли пользователь админом
 def is_admin(user_id):
