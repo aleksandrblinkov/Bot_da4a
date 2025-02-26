@@ -241,7 +241,7 @@ def finish_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
-# Редактирование викторины
+# Редактирование викторины (выбор викторины)
 @bot.callback_query_handler(func=lambda call: call.data == "edit_quiz")
 def edit_quiz(call):
     if is_admin(call.from_user.id):
@@ -263,6 +263,28 @@ def edit_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
+# Выбор вопроса для редактирования
+@bot.callback_query_handler(func=lambda call: call.data.startswith("edit_quiz_"))
+def edit_quiz_questions(call):
+    if is_admin(call.from_user.id):
+        quiz_id = int(call.data.split("_")[2])
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, question FROM questions WHERE quiz_id = %s", (quiz_id,))
+        questions = cursor.fetchall()
+        conn.close()
+
+        if not questions:
+            bot.send_message(call.message.chat.id, "В этой викторине нет вопросов.")
+            return
+
+        markup = types.InlineKeyboardMarkup()
+        for question in questions:
+            markup.add(types.InlineKeyboardButton(text=question[1], callback_data=f"edit_question_{question[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(call.message.chat.id, "Выберите вопрос для редактирования:", reply_markup=markup)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
 # Редактирование вопроса
 @bot.callback_query_handler(func=lambda call: call.data.startswith("edit_question_"))
@@ -294,70 +316,6 @@ def edit_question(call):
             bot.send_message(call.message.chat.id, f"📝 Вопрос: {question}\n✅ Ответ: {answer}", reply_markup=markup)
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
-
-# Изменение текста вопроса
-@bot.callback_query_handler(func=lambda call: call.data == "edit_question_text")
-def edit_question_text(call):
-    if is_admin(call.from_user.id):
-        msg = bot.send_message(call.message.chat.id, "Введите новый текст вопроса:")
-        bot.register_next_step_handler(msg, process_edit_question_text, call.from_user.id)
-    else:
-        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
-
-def process_edit_question_text(message, user_id):
-    new_question = message.text
-    temp_data[user_id]['question'] = new_question
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE questions SET question = %s WHERE id = %s", (new_question, temp_data[user_id]['question_id']))
-    conn.commit()
-    conn.close()
-    bot.send_message(message.chat.id, "✅ Текст вопроса успешно изменен.")
-    edit_question(message)  # Возвращаемся к меню редактирования вопроса
-
-# Изменение ответа на вопрос
-@bot.callback_query_handler(func=lambda call: call.data == "edit_question_answer")
-def edit_question_answer(call):
-    if is_admin(call.from_user.id):
-        msg = bot.send_message(call.message.chat.id, "Введите новый ответ на вопрос:")
-        bot.register_next_step_handler(msg, process_edit_question_answer, call.from_user.id)
-    else:
-        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
-
-def process_edit_question_answer(message, user_id):
-    new_answer = message.text
-    temp_data[user_id]['answer'] = new_answer
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE questions SET answer = %s WHERE id = %s", (new_answer, temp_data[user_id]['question_id']))
-    conn.commit()
-    conn.close()
-    bot.send_message(message.chat.id, "✅ Ответ на вопрос успешно изменен.")
-    edit_question(message)  # Возвращаемся к меню редактирования вопроса
-
-# Изменение фото вопроса
-@bot.callback_query_handler(func=lambda call: call.data == "edit_question_photo")
-def edit_question_photo(call):
-    if is_admin(call.from_user.id):
-        msg = bot.send_message(call.message.chat.id, "Отправьте новое фото для вопроса (или напишите 'нет', чтобы удалить фото):")
-        bot.register_next_step_handler(msg, process_edit_question_photo, call.from_user.id)
-    else:
-        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
-
-def process_edit_question_photo(message, user_id):
-    if message.photo:
-        new_photo = message.photo[-1].file_id
-    else:
-        new_photo = None
-
-    temp_data[user_id]['photo'] = new_photo
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE questions SET photo = %s WHERE id = %s", (new_photo, temp_data[user_id]['question_id']))
-    conn.commit()
-    conn.close()
-    bot.send_message(message.chat.id, "✅ Фото вопроса успешно изменено.")
-    edit_question(message)  # Возвращаемся к меню редактирования вопроса
 
 # Удаление викторины
 @bot.callback_query_handler(func=lambda call: call.data == "delete_quiz")
