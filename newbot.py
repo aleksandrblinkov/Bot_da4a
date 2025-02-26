@@ -136,6 +136,9 @@ def start_command(message):
     if is_admin(message.from_user.id):
         markup.add(types.InlineKeyboardButton(text="Создать викторину", callback_data="create_quiz"))
         markup.add(types.InlineKeyboardButton(text="Запустить викторину", callback_data="start_quiz"))
+        markup.add(types.InlineKeyboardButton(text="Редактировать викторину", callback_data="edit_quiz"))
+        markup.add(types.InlineKeyboardButton(text="Добавить админа", callback_data="add_admin"))
+        markup.add(types.InlineKeyboardButton(text="Удалить админа", callback_data="remove_admin"))
     markup.add(types.InlineKeyboardButton(text="Помощь", callback_data="help"))
     bot.send_message(message.chat.id, "Привет! Я бот для викторин. Выберите действие:", reply_markup=markup)
 
@@ -148,6 +151,8 @@ def help_command(call):
 - Создать викторину
 - Запустить викторину
 - Редактировать викторину
+- Добавить админа
+- Удалить админа
 """
     else:
         commands = """
@@ -171,6 +176,7 @@ def process_quiz_name(message, user_id):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text="Добавить вопрос", callback_data="add_question"))
     markup.add(types.InlineKeyboardButton(text="Завершить создание", callback_data="finish_quiz"))
+    markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
     bot.send_message(message.chat.id, f"Викторина '{quiz_name}' создана. Что дальше?", reply_markup=markup)
 
 # Добавление вопроса
@@ -211,6 +217,7 @@ def process_photo(message, user_id):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text="Добавить еще вопрос", callback_data="add_question"))
     markup.add(types.InlineKeyboardButton(text="Завершить викторину", callback_data="finish_quiz"))
+    markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
     bot.send_message(message.chat.id, "Что дальше?", reply_markup=markup)
 
 # Завершение создания викторины
@@ -235,6 +242,130 @@ def finish_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
+# Редактирование викторины
+@bot.callback_query_handler(func=lambda call: call.data == "edit_quiz")
+def edit_quiz(call):
+    if is_admin(call.from_user.id):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM quizzes WHERE admin_id = %s", (call.from_user.id,))
+        quizzes = cursor.fetchall()
+        conn.close()
+
+        if not quizzes:
+            bot.send_message(call.message.chat.id, "Нет доступных викторин для редактирования.")
+            return
+
+        markup = types.InlineKeyboardMarkup()
+        for quiz in quizzes:
+            markup.add(types.InlineKeyboardButton(text=quiz[1], callback_data=f"edit_quiz_{quiz[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(call.message.chat.id, "Выберите викторину для редактирования:", reply_markup=markup)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+# Редактирование вопроса
+@bot.callback_query_handler(func=lambda call: call.data.startswith("edit_quiz_"))
+def edit_quiz_questions(call):
+    if is_admin(call.from_user.id):
+        quiz_id = int(call.data.split("_")[2])
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, question FROM questions WHERE quiz_id = %s", (quiz_id,))
+        questions = cursor.fetchall()
+        conn.close()
+
+        if not questions:
+            bot.send_message(call.message.chat.id, "В этой викторине нет вопросов.")
+            return
+
+        markup = types.InlineKeyboardMarkup()
+        for question in questions:
+            markup.add(types.InlineKeyboardButton(text=question[1], callback_data=f"edit_question_{question[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(call.message.chat.id, "Выберите вопрос для редактирования:", reply_markup=markup)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+# Добавление админа
+@bot.callback_query_handler(func=lambda call: call.data == "add_admin")
+def add_admin(call):
+    if is_admin(call.from_user.id):
+        msg = bot.send_message(call.message.chat.id, "Перешлите любое сообщение от пользователя, которого нужно сделать админом.")
+        bot.register_next_step_handler(msg, process_add_admin)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+def process_add_admin(message):
+    if not (message.forward_from or message.forward_from_chat):
+        bot.send_message(message.chat.id, "❌ Это не пересланное сообщение. Пожалуйста, перешлите сообщение от пользователя.")
+        return
+
+    if message.forward_from:
+        user_id = message.forward_from.id
+        username = message.forward_from.username or message.forward_from.first_name
+    else:
+        bot.send_message(message.chat.id, "❌ Нельзя добавить админа из группы или канала. Перешлите сообщение из личного чата.")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (user_id,))
+        if cursor.fetchone():
+            bot.send_message(message.chat.id, f"❌ Пользователь @{username} уже является админом.")
+            return
+
+        cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (user_id, username))
+        conn.commit()
+        bot.send_message(message.chat.id, f"✅ Пользователь @{username} успешно добавлен в список админов!")
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении админа: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при добавлении админа.")
+    finally:
+        conn.close()
+
+# Удаление админа
+@bot.callback_query_handler(func=lambda call: call.data == "remove_admin")
+def remove_admin(call):
+    if is_admin(call.from_user.id):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM admins")
+        admins = cursor.fetchall()
+        conn.close()
+
+        if not admins:
+            bot.send_message(call.message.chat.id, "Нет доступных админов для удаления.")
+            return
+
+        markup = types.InlineKeyboardMarkup()
+        for admin in admins:
+            markup.add(types.InlineKeyboardButton(text=f"@{admin[0]}", callback_data=f"remove_admin_{admin[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(call.message.chat.id, "Выберите админа для удаления:", reply_markup=markup)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("remove_admin_"))
+def process_remove_admin(call):
+    if is_admin(call.from_user.id):
+        username = call.data.split("_")[2]
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM admins WHERE username = %s", (username,))
+        conn.commit()
+        conn.close()
+        bot.send_message(call.message.chat.id, f"Админ @{username} удален.")
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+# Кнопка "Назад"
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_main")
+def back_to_main(call):
+    start_command(call.message)
+
 # Запуск викторины
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
 def start_quiz(call):
@@ -252,134 +383,9 @@ def start_quiz(call):
         markup = types.InlineKeyboardMarkup()
         for quiz in quizzes:
             markup.add(types.InlineKeyboardButton(text=quiz[1], callback_data=f"start_quiz_{quiz[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
         bot.send_message(call.message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
-# Обработка запуска викторины
-@bot.callback_query_handler(func=lambda call: call.data.startswith("start_quiz_"))
-def process_start_quiz(call):
-    if is_admin(call.from_user.id):
-        quiz_id = int(call.data.split("_")[2])
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM quizzes WHERE id = %s", (quiz_id,))
-        quiz_name = cursor.fetchone()[0]
-        conn.close()
-
-        active_quizzes[call.message.chat.id] = {
-            'quiz_id': quiz_id,
-            'current_question': 0,
-            'scores': defaultdict(int),
-            'current_answer': None
-        }
-
-        bot.send_message(call.message.chat.id, f"🎉 Викторина '{quiz_name}' начнется через 15 секунд! Приготовьтесь!")
-        time.sleep(15)
-        ask_question(call.message.chat.id, quiz_id)
-    else:
-        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
-
-# Задать вопрос
-def ask_question(chat_id, quiz_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT question, answer, photo FROM questions WHERE quiz_id = %s", (quiz_id,))
-    questions = cursor.fetchall()
-    conn.close()
-
-    if not questions:
-        bot.send_message(chat_id, "В этой викторине нет вопросов.")
-        end_quiz(chat_id, quiz_id)
-        return
-
-    current_question = active_quizzes[chat_id]['current_question']
-    if current_question >= len(questions):
-        end_quiz(chat_id, quiz_id)
-        return
-
-    question, answer, photo = questions[current_question]
-    active_quizzes[chat_id]['current_answer'] = answer.lower()
-
-    if photo:
-        bot.send_photo(chat_id, photo, caption=f"❓ Вопрос {current_question + 1}: {question}")
-    else:
-        bot.send_message(chat_id, f"❓ Вопрос {current_question + 1}: {question}")
-
-# Обработка ответов
-@bot.message_handler(func=lambda message: message.chat.id in active_quizzes)
-def handle_answer(message):
-    chat_id = message.chat.id
-
-    if chat_id not in active_quizzes or 'current_answer' not in active_quizzes[chat_id]:
-        bot.send_message(chat_id, "❌ Викторина не активна или вопрос не задан.")
-        return
-
-    user_answer = message.text.lower()
-    correct_answer = active_quizzes[chat_id]['current_answer']
-
-    if user_answer == correct_answer:
-        user_id = message.from_user.id
-        username = message.from_user.username or message.from_user.first_name
-        active_quizzes[chat_id]['scores'][user_id] += 1
-        bot.send_message(chat_id, f"🎉 Правильно! @{username} получает очко!")
-
-        show_scores(chat_id)
-
-        active_quizzes[chat_id]['current_question'] += 1
-        time.sleep(5)
-        ask_question(chat_id, active_quizzes[chat_id]['quiz_id'])
-
-# Показать результаты
-def show_scores(chat_id):
-    scores = active_quizzes[chat_id]['scores']
-    if not scores:
-        return
-
-    scoreboard = "🏆 Текущие результаты:\n"
-    for user_id, score in scores.items():
-        user = bot.get_chat_member(chat_id, user_id).user
-        username = user.username or user.first_name
-        scoreboard += f"👤 @{username}: {score} очков\n"
-    bot.send_message(chat_id, scoreboard)
-
-# Завершение викторины
-def end_quiz(chat_id, quiz_id):
-    scores = active_quizzes[chat_id]['scores']
-    if not scores:
-        bot.send_message(chat_id, "Викторина завершена, но никто не ответил правильно.")
-        return
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for user_id, score in scores.items():
-        user = bot.get_chat_member(chat_id, user_id).user
-        username = user.username or user.first_name
-        cursor.execute("INSERT INTO results (quiz_id, user_id, username, score) VALUES (%s, %s, %s, %s)",
-                       (quiz_id, user_id, username, score))
-    conn.commit()
-    conn.close()
-
-    final_scoreboard = "🏆 Финальные результаты:\n"
-    for user_id, score in scores.items():
-        user = bot.get_chat_member(chat_id, user_id).user
-        username = user.username or user.first_name
-        final_scoreboard += f"👤 @{username}: {score} очков\n"
-    bot.send_message(chat_id, final_scoreboard)
-    bot.send_message(chat_id, "🎉 Викторина завершена! Спасибо за участие!")
-
-    del active_quizzes[chat_id]
-
-# Обработка ошибок
-@bot.message_handler(func=lambda message: True)
-def handle_errors(message):
-    try:
-        bot.process_new_messages([message])
-    except Exception as ex:
-        logger.error(f"Ошибка: {ex}", exc_info=True)
-        bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
-
-# Запуск бота
-if __name__ == '__main__':
-    logger.info("Бот запущен и работает...")
-    bot.polling(none_stop=True)
+# О
