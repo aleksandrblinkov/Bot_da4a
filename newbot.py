@@ -34,84 +34,93 @@ def get_db_connection():
 def create_tables():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS quizzes (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR NOT NULL,
-        admin_id INT NOT NULL
-    )
-    ''')
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS questions (
-        id SERIAL PRIMARY KEY,
-        quiz_id INT NOT NULL,
-        question VARCHAR NOT NULL,
-        answer VARCHAR NOT NULL,
-        photo VARCHAR,
-        FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE
-    )
-    ''')
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS results (
-        id SERIAL PRIMARY KEY,
-        quiz_id INT NOT NULL,
-        user_id INT NOT NULL,
-        username VARCHAR NOT NULL,
-        score INT DEFAULT 0,
-        FOREIGN KEY (quiz_id) REFERENCES quizzes (id) ON DELETE CASCADE
-    )
-    ''')
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS admins (
-        id SERIAL PRIMARY KEY,
-        user_id INT NOT NULL,
-        username VARCHAR NOT NULL
-    )
-    ''')
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS admins (
+            id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL UNIQUE,
+            username VARCHAR NOT NULL
+        )
+        ''')
+        conn.commit()
+        logger.info("Таблица admins создана или уже существует.")
+    except Exception as e:
+        logger.error(f"Ошибка при создании таблицы admins: {e}")
+    finally:
+        conn.close()
 
 # Инициализация администратора
 def initialize_admin():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Твой ID и username
-    admin_id = 881514562
-    admin_username = "mangata_al"
+    # Ваш ID и username
+    admin_id = 881514562  # Замените на ваш реальный ID
+    admin_username = "mangata_al"  # Замените на ваш username
 
-    # Проверяем, есть ли ты в таблице admins
-    cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (admin_id,))
-    result = cursor.fetchone()
+    try:
+        # Проверяем, есть ли вы в таблице admins
+        cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (admin_id,))
+        result = cursor.fetchone()
 
-    # Если тебя нет, добавляем
-    if not result:
-        cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (admin_id, admin_username))
-        conn.commit()
-        logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
-    else:
-        logger.info(f"Администратор @{admin_username} (ID: {admin_id}) уже существует в базе данных.")
-
-    conn.close()
+        # Если вас нет, добавляем
+        if not result:
+            cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (admin_id, admin_username))
+            conn.commit()
+            logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
+        else:
+            logger.info(f"Администратор @{admin_username} (ID: {admin_id}) уже существует в базе данных.")
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении администратора: {e}")
+    finally:
+        conn.close()
 
 # Создаем таблицы и добавляем администратора
 create_tables()
 initialize_admin()
-
 # Временные данные для создания викторин
 temp_data = {}
 
 # Текущие активные викторины
 active_quizzes = defaultdict(dict)
-
 # Проверка, является ли пользователь админом
 def is_admin(user_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    return result is not None
+    try:
+        cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        if result:
+            logger.info(f"Пользователь {user_id} является администратором.")
+            return True
+        else:
+            logger.info(f"Пользователь {user_id} не является администратором.")
+            return False
+    except Exception as e:
+        logger.error(f"Ошибка при проверке администратора: {e}")
+        return False
+    finally:
+        conn.close()
+
+# Команда /id
+@bot.message_handler(commands=['id'])
+def get_user_id(message):
+    user_id = message.from_user.id
+    bot.send_message(message.chat.id, f"Ваш ID: {user_id}")
+
+# Команда /check_admin
+@bot.message_handler(commands=['check_admin'])
+def check_admin(message):
+    user_id = message.from_user.id
+    if is_admin(user_id):
+        bot.send_message(message.chat.id, "✅ Вы администратор!")
+    else:
+        bot.send_message(message.chat.id, "❌ Вы не администратор.")
+
+# Запуск бота
+if __name__ == '__main__':
+    logger.info("Бот запущен и работает...")
+    bot.polling(none_stop=True)
 
 # Команда /help
 def help_command(message):
