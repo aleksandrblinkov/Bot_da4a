@@ -388,4 +388,130 @@ def start_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
-# О
+# Обработка запуска викторины
+@bot.callback_query_handler(func=lambda call: call.data.startswith("start_quiz_"))
+def process_start_quiz(call):
+    if is_admin(call.from_user.id):
+        quiz_id = int(call.data.split("_")[2])
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM quizzes WHERE id = %s", (quiz_id,))
+        quiz_name = cursor.fetchone()[0]
+        conn.close()
+
+        active_quizzes[call.message.chat.id] = {
+            'quiz_id': quiz_id,
+            'current_question': 0,
+            'scores': defaultdict(int),
+            'current_answer': None
+        }
+
+        bot.send_message(call.message.chat.id, f"🎉 Викторина '{quiz_name}' начнется через 15 секунд! Приготовьтесь!")
+        time.sleep(15)
+        ask_question(call.message.chat.id, quiz_id)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+# Задать вопрос
+def ask_question(chat_id, quiz_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT question, answer, photo FROM questions WHERE quiz_id = %s", (quiz_id,))
+    questions = cursor.fetchall()
+    conn.close()
+
+    if not questions:
+        bot.send_message(chat_id, "В этой викторине нет вопросов.")
+        end_quiz(chat_id, quiz_id)
+        return
+
+    current_question = active_quizzes[chat_id]['current_question']
+    if current_question >= len(questions):
+        end_quiz(chat_id, quiz_id)
+        return
+
+    question, answer, photo = questions[current_question]
+    active_quizzes[chat_id]['current_answer'] = answer.lower()
+
+    if photo:
+        bot.send_photo(chat_id, photo, caption=f"❓ Вопрос {current_question + 1}: {question}")
+    else:
+        bot.send_message(chat_id, f"❓ Вопрос {current_question + 1}: {question}")
+
+# Обработка ответов
+@bot.message_handler(func=lambda message: message.chat.id in active_quizzes)
+def handle_answer(message):
+    chat_id = message.chat.id
+
+    if chat_id not in active_quizzes or 'current_answer' not in active_quizzes[chat_id]:
+        bot.send_message(chat_id, "❌ Викторина не активна или вопрос не задан.")
+        return
+
+    user_answer = message.text.lower()
+    correct_answer = active_quizzes[chat_id]['current_answer']
+
+    if user_answer == correct_answer:
+        user_id = message.from_user.id
+        username = message.from_user.username or message.from_user.first_name
+        active_quizzes[chat_id]['scores'][user_id] += 1
+        bot.send_message(chat_id, f"🎉 Правильно! @{username} получает очко!")
+
+        show_scores(chat_id)
+
+        active_quizzes[chat_id]['current_question'] += 1
+        time.sleep(5)
+        ask_question(chat_id, active_quizzes[chat_id]['quiz_id'])
+
+# Показать результаты
+def show_scores(chat_id):
+    scores = active_quizzes[chat_id]['scores']
+    if not scores:
+        return
+
+    scoreboard = "🏆 Текущие результаты:\n"
+    for user_id, score in scores.items():
+        user = bot.get_chat_member(chat_id, user_id).user
+        username = user.username or user.first_name
+        scoreboard += f"👤 @{username}: {score} очков\n"
+    bot.send_message(chat_id, scoreboard)
+
+# Завершение викторины
+def end_quiz(chat_id, quiz_id):
+    scores = active_quizzes[chat_id]['scores']
+    if not scores:
+        bot.send_message(chat_id, "Викторина завершена, но никто не ответил правильно.")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    for user_id, score in scores.items():
+        user = bot.get_chat_member(chat_id, user_id).user
+        username = user.username or user.first_name
+        cursor.execute("INSERT INTO results (quiz_id, user_id, username, score) VALUES (%s, %s, %s, %s)",
+                       (quiz_id, user_id, username, score))
+    conn.commit()
+    conn.close()
+
+    final_scoreboard = "🏆 Финальные результаты:\n"
+    for user_id, score in scores.items():
+        user = bot.get_chat_member(chat_id, user_id).user
+        username = user.username or user.first_name
+        final_scoreboard += f"👤 @{username}: {score} очков\n"
+    bot.send_message(chat_id, final_scoreboard)
+    bot.send_message(chat_id, "🎉 Викторина завершена! Спасибо за участие!")
+
+    del active_quizzes[chat_id]
+
+# Обработка ошибок
+@bot.message_handler(func=lambda message: True)
+def handle_errors(message):
+    try:
+        bot.process_new_messages([message])
+    except Exception as ex:
+        logger.error(f"Ошибка: {ex}", exc_info=True)
+        bot.send_message(message.chat.id, "Произошла ошибка. Пожалуйста, попробуйте еще раз.")
+
+# Запуск бота
+if __name__ == '__main__':
+    logger.info("Бот запущен и работает...")
+    bot.polling(none_stop=True)
