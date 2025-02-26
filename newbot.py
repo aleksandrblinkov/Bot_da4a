@@ -89,6 +89,8 @@ def initialize_admin():
         cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (admin_id, admin_username))
         conn.commit()
         logger.info(f"Администратор @{admin_username} (ID: {admin_id}) добавлен в базу данных.")
+    else:
+        logger.info(f"Администратор @{admin_username} (ID: {admin_id}) уже существует в базе данных.")
 
     conn.close()
 
