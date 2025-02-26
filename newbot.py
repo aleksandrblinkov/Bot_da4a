@@ -241,7 +241,7 @@ def finish_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
-# Редактирование викторины (выбор викторины)
+# Редактирование викторины
 @bot.callback_query_handler(func=lambda call: call.data == "edit_quiz")
 def edit_quiz(call):
     if is_admin(call.from_user.id):
@@ -281,7 +281,7 @@ def edit_quiz_questions(call):
         markup = types.InlineKeyboardMarkup()
         for question in questions:
             markup.add(types.InlineKeyboardButton(text=question[1], callback_data=f"edit_question_{question[0]}"))
-        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="edit_quiz"))
         bot.send_message(call.message.chat.id, "Выберите вопрос для редактирования:", reply_markup=markup)
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
@@ -290,11 +290,10 @@ def edit_quiz_questions(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("edit_question_"))
 def edit_question(call):
     if is_admin(call.from_user.id):
-        # Извлекаем question_id из call.data
         question_id = int(call.data.split("_")[2])
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT question, answer, photo FROM questions WHERE id = %s", (question_id,))
+        cursor.execute("SELECT question, answer, photo, quiz_id FROM questions WHERE id = %s", (question_id,))
         question_data = cursor.fetchone()
         conn.close()
 
@@ -302,21 +301,20 @@ def edit_question(call):
             bot.send_message(call.message.chat.id, "❌ Вопрос не найден.")
             return
 
-        question, answer, photo = question_data
-        # Сохраняем данные вопроса во временные данные
+        question, answer, photo, quiz_id = question_data
         temp_data[call.from_user.id] = {
             'question_id': question_id,
             'question': question,
             'answer': answer,
-            'photo': photo
+            'photo': photo,
+            'quiz_id': quiz_id  # Сохраняем quiz_id для возврата
         }
 
-        # Создаем меню для редактирования
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(text="Изменить вопрос", callback_data="edit_question_text"))
         markup.add(types.InlineKeyboardButton(text="Изменить ответ", callback_data="edit_question_answer"))
         markup.add(types.InlineKeyboardButton(text="Изменить фото", callback_data="edit_question_photo"))
-        markup.add(types.InlineKeyboardButton(text="Назад", callback_data=f"edit_quiz_{temp_data[call.from_user.id]['quiz_id']}"))  # Возврат к списку вопросов
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data=f"edit_quiz_{quiz_id}"))  # Возврат к списку вопросов
 
         if photo:
             bot.send_photo(call.message.chat.id, photo, caption=f"📝 Вопрос: {question}\n✅ Ответ: {answer}", reply_markup=markup)
@@ -424,35 +422,10 @@ def process_delete_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
-# Кнопка "Назад" для возврата к списку вопросов
-@bot.callback_query_handler(func=lambda call: call.data.startswith("edit_quiz_"))
-def back_to_questions(call):
-    if is_admin(call.from_user.id):
-        quiz_id = int(call.data.split("_")[2])
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, question FROM questions WHERE quiz_id = %s", (quiz_id,))
-        questions = cursor.fetchall()
-        conn.close()
-
-        if not questions:
-            bot.send_message(call.message.chat.id, "В этой викторине нет вопросов.")
-            return
-
-        markup = types.InlineKeyboardMarkup()
-        for question in questions:
-            markup.add(types.InlineKeyboardButton(text=question[1], callback_data=f"edit_question_{question[0]}"))
-        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="edit_quiz"))  # Возврат к списку викторин
-        bot.send_message(call.message.chat.id, "Выберите вопрос для редактирования:", reply_markup=markup)
-    else:
-        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
-
-# Кнопка "Назад" в главном меню
+# Кнопка "Назад"
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_main")
 def back_to_main(call):
     start_command(call.message)
-
-
 
 # Запуск викторины
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
