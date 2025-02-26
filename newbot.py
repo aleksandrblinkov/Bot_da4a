@@ -78,11 +78,11 @@ def initialize_admin():
 # Создаем таблицы и добавляем администратора
 create_tables()
 initialize_admin()
-# Временные данные для создания викторин
-temp_data = {}
 
-# Текущие активные викторины
-active_quizzes = defaultdict(dict)
+# Глобальные переменные
+temp_data = {}  # Временные данные для создания викторин
+active_quizzes = defaultdict(dict)  # Текущие активные викторины
+
 # Проверка, является ли пользователь админом
 def is_admin(user_id):
     conn = get_db_connection()
@@ -117,10 +117,6 @@ def check_admin(message):
     else:
         bot.send_message(message.chat.id, "❌ Вы не администратор.")
 
-# Запуск бота
-if __name__ == '__main__':
-    logger.info("Бот запущен и работает...")
-    bot.polling(none_stop=True)
 
 # Команда /help
 def help_command(message):
