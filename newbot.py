@@ -311,7 +311,7 @@ def edit_question(call):
         }
 
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton(text="Изменить вопрос", callback_data="edit_question_text"))
+        markup.add(types.InlineKeyboardButton(text="Изменить текст вопроса", callback_data="edit_question_text"))
         markup.add(types.InlineKeyboardButton(text="Изменить ответ", callback_data="edit_question_answer"))
         markup.add(types.InlineKeyboardButton(text="Изменить фото", callback_data="edit_question_photo"))
         markup.add(types.InlineKeyboardButton(text="Назад", callback_data=f"edit_quiz_{quiz_id}"))  # Возврат к списку вопросов
@@ -430,21 +430,24 @@ def back_to_main(call):
 # Запуск викторины
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
 def start_quiz(call):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM quizzes")
-    quizzes = cursor.fetchall()
-    conn.close()
+    if is_admin(call.from_user.id):  # Проверка, является ли пользователь админом
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM quizzes")
+        quizzes = cursor.fetchall()
+        conn.close()
 
-    if not quizzes:
-        bot.send_message(call.message.chat.id, "Нет доступных викторин.")
-        return
+        if not quizzes:
+            bot.send_message(call.message.chat.id, "Нет доступных викторин.")
+            return
 
-    markup = types.InlineKeyboardMarkup()
-    for quiz in quizzes:
-        markup.add(types.InlineKeyboardButton(text=quiz[1], callback_data=f"start_quiz_{quiz[0]}"))
-    markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
-    bot.send_message(call.message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
+        markup = types.InlineKeyboardMarkup()
+        for quiz in quizzes:
+            markup.add(types.InlineKeyboardButton(text=quiz[1], callback_data=f"start_quiz_{quiz[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(call.message.chat.id, "Выберите викторину для запуска:", reply_markup=markup)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
 # Обработка запуска викторины
 @bot.callback_query_handler(func=lambda call: call.data.startswith("start_quiz_"))
