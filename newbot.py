@@ -423,6 +423,81 @@ def process_delete_quiz(call):
     else:
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
+# Добавление админа
+@bot.callback_query_handler(func=lambda call: call.data == "add_admin")
+def add_admin(call):
+    if is_admin(call.from_user.id):
+        msg = bot.send_message(call.message.chat.id, "Перешлите любое сообщение от пользователя, которого нужно сделать админом.")
+        bot.register_next_step_handler(msg, process_add_admin)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+def process_add_admin(message):
+    if not (message.forward_from or message.forward_from_chat):
+        bot.send_message(message.chat.id, "❌ Это не пересланное сообщение. Пожалуйста, перешлите сообщение от пользователя.")
+        return
+
+    if message.forward_from:
+        user_id = message.forward_from.id
+        username = message.forward_from.username or message.forward_from.first_name
+    else:
+        bot.send_message(message.chat.id, "❌ Нельзя добавить админа из группы или канала. Перешлите сообщение из личного чата.")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT user_id FROM admins WHERE user_id = %s", (user_id,))
+        if cursor.fetchone():
+            bot.send_message(message.chat.id, f"❌ Пользователь @{username} уже является админом.")
+            return
+
+        cursor.execute("INSERT INTO admins (user_id, username) VALUES (%s, %s)", (user_id, username))
+        conn.commit()
+        bot.send_message(message.chat.id, f"✅ Пользователь @{username} успешно добавлен в список админов!")
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении админа: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при добавлении админа.")
+    finally:
+        conn.close()
+
+# Удаление админа
+@bot.callback_query_handler(func=lambda call: call.data == "remove_admin")
+def remove_admin(call):
+    if is_admin(call.from_user.id):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM admins")
+        admins = cursor.fetchall()
+        conn.close()
+
+        if not admins:
+            bot.send_message(call.message.chat.id, "Нет доступных админов для удаления.")
+            return
+
+        markup = types.InlineKeyboardMarkup()
+        for admin in admins:
+            markup.add(types.InlineKeyboardButton(text=f"@{admin[0]}", callback_data=f"remove_admin_{admin[0]}"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(call.message.chat.id, "Выберите админа для удаления:", reply_markup=markup)
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("remove_admin_"))
+def process_remove_admin(call):
+    if is_admin(call.from_user.id):
+        username = call.data.split("_")[2]
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM admins WHERE username = %s", (username,))
+        conn.commit()
+        conn.close()
+        bot.send_message(call.message.chat.id, f"Админ @{username} удален.")
+    else:
+        bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
+
+
 # Кнопка "Назад"
 @bot.callback_query_handler(func=lambda call: call.data == "back_to_main")
 def back_to_main(call):
