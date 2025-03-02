@@ -132,18 +132,23 @@ def is_admin(user_id):
 # Команда /start
 @bot.message_handler(commands=['start'])
 def start_command(message):
-    markup = types.InlineKeyboardMarkup()
-    if is_admin(message.from_user.id):
-        markup.add(types.InlineKeyboardButton(text="Создать викторину", callback_data="create_quiz"))
+    if message.chat.type == "private":  # Если это личный чат с ботом
+        markup = types.InlineKeyboardMarkup()
+        if is_admin(message.from_user.id):
+            markup.add(types.InlineKeyboardButton(text="Создать викторину", callback_data="create_quiz"))
+            markup.add(types.InlineKeyboardButton(text="Запустить викторину", callback_data="start_quiz"))
+            markup.add(types.InlineKeyboardButton(text="Редактировать викторину", callback_data="edit_quiz"))
+            markup.add(types.InlineKeyboardButton(text="Удалить викторину", callback_data="delete_quiz"))
+            markup.add(types.InlineKeyboardButton(text="Добавить админа", callback_data="add_admin"))
+            markup.add(types.InlineKeyboardButton(text="Удалить админа", callback_data="remove_admin"))
+        else:
+            markup.add(types.InlineKeyboardButton(text="Запустить викторину", callback_data="start_quiz"))
+        markup.add(types.InlineKeyboardButton(text="Помощь", callback_data="help"))
+        bot.send_message(message.chat.id, "Привет! Я бот для викторин. Выберите действие:", reply_markup=markup)
+    else:  # Если это общий чат
+        markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(text="Запустить викторину", callback_data="start_quiz"))
-        markup.add(types.InlineKeyboardButton(text="Редактировать викторину", callback_data="edit_quiz"))
-        markup.add(types.InlineKeyboardButton(text="Удалить викторину", callback_data="delete_quiz"))
-        markup.add(types.InlineKeyboardButton(text="Добавить админа", callback_data="add_admin"))
-        markup.add(types.InlineKeyboardButton(text="Удалить админа", callback_data="remove_admin"))
-    else:
-        markup.add(types.InlineKeyboardButton(text="Запустить викторину", callback_data="start_quiz"))
-    markup.add(types.InlineKeyboardButton(text="Помощь", callback_data="help"))
-    bot.send_message(message.chat.id, "Привет! Я бот для викторин. Выберите действие:", reply_markup=markup)
+        bot.send_message(message.chat.id, "Привет! Я бот для викторин. Нажмите кнопку ниже, чтобы запустить викторину.", reply_markup=markup)
 
 # Команда /help
 @bot.callback_query_handler(func=lambda call: call.data == "help")
