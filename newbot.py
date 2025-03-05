@@ -82,7 +82,7 @@ def initialize_admin():
     cursor = conn.cursor()
 
     # Ваш реальный ID и username
-    admin_id = 5679093544  # Замените на ваш реальный ID
+    admin_id = 881514562  # Замените на ваш реальный ID
     admin_username = "mangata_al"  # Замените на ваш username
 
     try:
