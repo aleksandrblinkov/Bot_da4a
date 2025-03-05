@@ -107,7 +107,7 @@ create_tables()
 initialize_admin()
 
 # Глобальные переменные
-temp_data = {}  # Временные данные для создания викторин
+temp_data = defaultdict(lambda: {'questions': []})  # Временные данные для создания викторин
 active_quizzes = defaultdict(dict)  # Текущие активные викторины
 
 # Проверка, является ли пользователь админом
@@ -193,36 +193,50 @@ def add_question(call):
         bot.answer_callback_query(call.id, "❌ У вас нет прав для выполнения этой команды.")
 
 def process_question(message, user_id):
-    question = message.text
-    temp_data[user_id]['questions'].append({'question': question, 'answer': None, 'photo': None})
-    msg = bot.send_message(message.chat.id, "Введите ответ на этот вопрос:")
-    bot.register_next_step_handler(msg, process_answer, user_id)
+    try:
+        question = message.text
+        if user_id not in temp_data:
+            temp_data[user_id] = {'questions': []}
+        temp_data[user_id]['questions'].append({'question': question, 'answer': None, 'photo': None})
+        msg = bot.send_message(message.chat.id, "Введите ответ на этот вопрос:")
+        bot.register_next_step_handler(msg, process_answer, user_id)
+    except Exception as e:
+        logger.error(f"Ошибка в process_question: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при обработке вопроса. Попробуйте еще раз.")
 
 def process_answer(message, user_id):
-    answer = message.text
-    temp_data[user_id]['questions'][-1]['answer'] = answer
-    msg = bot.send_message(message.chat.id, "Хотите добавить фото к вопросу? (Отправьте фото или напишите 'нет')")
-    bot.register_next_step_handler(msg, process_photo, user_id)
+    try:
+        answer = message.text
+        temp_data[user_id]['questions'][-1]['answer'] = answer
+        msg = bot.send_message(message.chat.id, "Хотите добавить фото к вопросу? (Отправьте фото или напишите 'нет')")
+        bot.register_next_step_handler(msg, process_photo, user_id)
+    except Exception as e:
+        logger.error(f"Ошибка в process_answer: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при обработке ответа. Попробуйте еще раз.")
 
 def process_photo(message, user_id):
-    if message.photo:
-        photo_id = message.photo[-1].file_id
-        temp_data[user_id]['questions'][-1]['photo'] = photo_id
-    else:
-        temp_data[user_id]['questions'][-1]['photo'] = None
+    try:
+        if message.photo:
+            photo_id = message.photo[-1].file_id
+            temp_data[user_id]['questions'][-1]['photo'] = photo_id
+        else:
+            temp_data[user_id]['questions'][-1]['photo'] = None
 
-    question_data = temp_data[user_id]['questions'][-1]
-    preview = f"📝 Вопрос: {question_data['question']}\n✅ Ответ: {question_data['answer']}"
-    if question_data['photo']:
-        bot.send_photo(message.chat.id, question_data['photo'], caption=preview)
-    else:
-        bot.send_message(message.chat.id, preview)
+        question_data = temp_data[user_id]['questions'][-1]
+        preview = f"📝 Вопрос: {question_data['question']}\n✅ Ответ: {question_data['answer']}"
+        if question_data['photo']:
+            bot.send_photo(message.chat.id, question_data['photo'], caption=preview)
+        else:
+            bot.send_message(message.chat.id, preview)
 
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="Добавить еще вопрос", callback_data="add_question"))
-    markup.add(types.InlineKeyboardButton(text="Завершить викторину", callback_data="finish_quiz"))
-    markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
-    bot.send_message(message.chat.id, "Что дальше?", reply_markup=markup)
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton(text="Добавить еще вопрос", callback_data="add_question"))
+        markup.add(types.InlineKeyboardButton(text="Завершить викторину", callback_data="finish_quiz"))
+        markup.add(types.InlineKeyboardButton(text="Назад", callback_data="back_to_main"))
+        bot.send_message(message.chat.id, "Что дальше?", reply_markup=markup)
+    except Exception as e:
+        logger.error(f"Ошибка в process_photo: {e}")
+        bot.send_message(message.chat.id, "❌ Произошла ошибка при обработке фото. Попробуйте еще раз.")
 
 # Завершение создания викторины
 @bot.callback_query_handler(func=lambda call: call.data == "finish_quiz")
